@@ -23,9 +23,8 @@ const fetchUserCallback = (data) => {
     username.innerText = user.username;
     rank.innerText = user.user_rank;
     points.innerText = user.user_points;
-
-    console.log(user);
-    //todo Hide Spinner
+   
+    hideSpinner();
 }
 
 fetchData("/api/user-info", fetchUserCallback)

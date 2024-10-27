@@ -1,6 +1,8 @@
 <%- include('../include/header')%>
 
 <div class="container">
+
+    <%- include('../include/partials/spinner')%>
     <%- include('../include/partials/responseMessage')%>
 
     <div class="lobby hidden" id="lobby">
@@ -67,12 +69,16 @@
 
         </div>
     </div>
+
+    <%- include('../include/partials/chat')%>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="/js/index.js"></script>
 <script src="/js/lobby.js"></script>
+<script src="/js/spinner.js"></script>
 <script src="/js/responseMessage.js"></script>
+<script src="js/chat.js"></script>
 
 
 <%- include('../include/footer')%>

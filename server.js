@@ -19,6 +19,8 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIO(server);
 
+//como Redis es asíncrono, ahora debe ser llamado el servidor
+//desde una función anónima
 (async () => {
     // 1. Conectar a Redis
     await connectToRedis(); // Espera la conexión a Redis antes de continuar
@@ -56,6 +58,7 @@ const io = socketIO(server);
 
         socket.on('send-total-rooms-and-users', async () => {
             try {
+                //Redis en lugar de usar un callback, utiliza ahora promesas
                 const totalUsers = parseInt(await redisClient.get('total-users')) || 0;
                 const totalRooms = parseInt(await redisClient.get('total-rooms')) || 0;
                 const numberOfRooms = JSON.parse(await redisClient.get('number-of-rooms')) || [0, 0, 0, 0];
@@ -65,6 +68,14 @@ const io = socketIO(server);
                 console.error("Error al obtener datos de Redis:", err);
             }
         });
+
+        socket.on('send-message', async(message, user, roomId=null)=>{
+            if (roomId) {
+                socket.to(roomId).emit('receive-message', message, user);
+            } else {
+                socket.broadcast.emit('receive-message', message, user, true);
+            }
+        })
 
         socket.on('disconnect', async () => {
             try {

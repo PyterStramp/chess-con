@@ -38,3 +38,25 @@ CREATE TABLE games(
     FOREIGN KEY(user_id_black) REFERENCES users(id) ON DELETE CASCADE
 );
 
+--PROCEDURES
+
+CREATE OR REPLACE FUNCTION createUser(
+    p_username VARCHAR,
+    p_email VARCHAR,
+    p_password VARCHAR
+) RETURNS VOID AS $$
+DECLARE
+    userId INT;
+BEGIN
+
+    INSERT INTO users (rol, username, email, password)
+    VALUES (1, p_username, p_email, p_password)
+    RETURNING id INTO userId;
+
+    INSERT INTO user_info(user_id) VALUES (userId);
+
+EXCEPTION
+    WHEN unique_violation THEN
+        RAISE NOTICE 'El usuario con ese username o email ya existe';
+END;
+$$ LANGUAGE plpgsql;

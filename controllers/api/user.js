@@ -3,7 +3,6 @@ const bcrypt = require("bcryptjs");
 const {validationResult} = require("express-validator");
 const dotenv = require("dotenv");
 const db = require("../../config/db");
-const redisClient = require('../../config/redis');
 
 dotenv.config();
 
@@ -146,4 +145,29 @@ exports.login = async(req, res) => {
         res.redirect("/login?error=Something went weong");
     }
 
+}
+
+exports.getInfo = (req, res) =>{
+    try {
+        jwt.verify(req.cookies.token, jwtSecret, async (err, userPayload)=>{
+            if(err){
+                throw err;
+            }
+            const {id, email, username} = userPayload;
+            
+            let user = {
+                id,
+                username,
+                email,
+                user_rank: req.cookies.user_rank,
+                user_points: req.cookies.user_points
+            }
+
+            return res.json(user);
+
+        });
+    }catch(err) {
+        console.log(err);
+        res.status(500).json({error: err.message});
+    }
 }

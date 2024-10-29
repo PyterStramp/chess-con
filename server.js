@@ -8,6 +8,7 @@ const socketIO = require("socket.io");
 const cookieParser = require("cookie-parser");
 const { connectToRedis, redisClient } = require("./config/redis");
 const { newUser, removeUser } = require("./util/user");
+const {createRoom, joinRoom, removeRoom} = require("./util/room");
 
 dotenv.config();
 
@@ -69,23 +70,107 @@ const io = socketIO(server);
             }
         });
 
+        socket.on('get-rooms', async(rank)=> {
+            let roomData = await redisClient.get("rooms");
+
+            if (roomData) {
+                let roomsSocket = JSON.parse(roomData);
+                if (rank==='all') {
+                    socket.emit('receive-rooms', roomsSocket);
+                } else {
+                    let filteredRoom = roomsSocket.filter(room => room.players[0].user_rank === rank);
+                    socket.emit('receive-rooms', filteredRoom);
+                }
+            } else {
+                socket.emit('receive-rooms', []);
+            }
+        });
+
         socket.on('send-message', async(message, user, roomId=null)=>{
             if (roomId) {
                 socket.to(roomId).emit('receive-message', message, user);
             } else {
                 socket.broadcast.emit('receive-message', message, user, true);
             }
-        })
+        });
+
+        socket.on('create-room', async(roomId, time, user, password=null) => {
+            const roomIdRedis = await redisClient.get('roomId');
+            if (roomIdRedis) {
+                socket.emit("error", `Room with id ${roomIdRedis} already exists`);
+            } else {
+                if (password) {
+                    
+                    createRoom(roomId, user, time, password);
+                } else {
+                    createRoom(roomId, user, time);
+                }
+
+                socket.emit('room-created');
+            }
+        });
+
+        socket.on('join-room', async(roomId, user, password=null) => {
+            const roomIdRedis = await redisClient.get(roomId);
+            if (roomIdRedis) {
+                let room = JSON.parse(roomIdRedis);
+                if (room.players[1]===null) {
+                    if (room.password &&(!password || room.password !==password)) {
+                        socket.emit("error", "You have to provide the correct password");
+                        return;
+                    }
+                    joinRoom(roomId, user);
+
+                    if (room.password && password !=="") {
+                        socket.emit('room-joined', roomId, password);
+                    } else {
+                        socket.emit('room-joined', roomId);
+                    }
+
+                } else {
+                    socket.emit('error', `The room is full`);
+                }
+            }else {
+                socket.emit('error', `Room with id ${roomId} does not exist`);
+            }
+        });
+
+        socket.on('join-random', async(user) => {
+            const roomsRedis = await redisClient.get('rooms');
+            if (roomsRedis) {
+                let rooms = JSON.parse(roomsRedis);
+
+                let room = rooms.find(room => room.players[1] ===null && !room.password);
+
+                if (room) {
+                    joinRoom(room.id, user);
+                    socket.emit('room-joined', room.id);
+                } else {
+                    socket.emit('error', 'No room found');
+                }
+            } else {
+                socket.emit('error', "No room found");
+            }
+        });
 
         socket.on('disconnect', async () => {
             try {
                 const user = JSON.parse(await redisClient.get(socket.id));
                 if (user && user.room) {
-                    // TODO: remove user from room
+                    const userRoomRedis = await redisClient.get(user.room);
+                    if (userRoomRedis) {
+                        let roomRedis = JSON.parse(userRoomRedis);
+
+                        if (!roomRedis.gameFinished) {
+                            io.to(user.room).emit('error', 'An user has been disconnected');
+                        }
+                    }
+
+                    removeRoom(user.room, user.user_rank);
                 }
                 removeUser(socket.id);
             } catch (err) {
-                console.error("Error al manejar desconexión:", err);
+                console.error("Handling user disconnected error: ", err);
             }
         });
     });

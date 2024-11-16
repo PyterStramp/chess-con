@@ -25,3 +25,10 @@ exports.getGamesPage = (req, res) => {
     }    
     res.render("games", {authorized: true});
 }
+
+exports.getRoomPage = (req, res) => {
+    if (!req.cookies.token) {
+        return res.redirect("/login");
+    }    
+    res.render("room", {authorized: true});
+}

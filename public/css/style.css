@@ -849,7 +849,7 @@ nav{
 .chess-board .box:nth-child(40) ~ .box:nth-child(-2n+47),
 .chess-board .box:nth-child(48) ~ .box:nth-child(-2n+56),
 .chess-board .box:nth-child(56) ~ .box:nth-child(-2n+63) {
-    background: var(--main-color-darker);
+    background: black;
 }
 
 .box .piece{

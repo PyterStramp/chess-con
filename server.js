@@ -49,13 +49,65 @@ const io = socketIO(server);
 
     // Configuración de Socket.IO
     io.on("connection", (socket) => {
-        socket.on('user-connected', (user, roomId = null) => {
+        socket.on('user-connected', async(user, roomId = null, password=null) => {
             if (roomId) {
-                // TODO: join with roomID
+                const roomIdRedis = await redisClient.get(roomId);
+
+                if (roomIdRedis) {
+                    let room = JSON.parse(roomIdRedis);
+                    if (room.gameStarted) {
+                        socket.emit("error", "The room is full");
+                        return;
+                    }
+
+                    if (room.password &&(!password || room.password !==password)) {
+                        socket.emit("error", "You have to provide the correct password");
+                        return;
+                    }
+
+                    socket.join(roomId);
+                    newUser(socket.id, user, roomId);
+
+                    if (room.players[0].username === user.username) {
+                        return;
+                    }
+
+                    if (room.players[1]===null) {
+                        room.players[1] = user;
+                    }
+                    room.gameStarted = true;
+                    await redisClient.set(roomId, JSON.stringify(room));
+                    socket.to(roomId).emit("game-started", user);
+
+                    const roomIndicesRedis = await redisClient.get("roomIndices");
+                    if (roomIndicesRedis) {
+                        let roomIndices = JSON.parse(roomIndicesRedis);
+                        const roomsRedis = await redisClient.get('rooms');
+                        if (roomsRedis) {
+                            let rooms = JSON.parse(roomsRedis);
+
+                            rooms[roomIndices[roomId]] = room;
+                            await redisClient.set('rooms', JSON.stringify(rooms));
+                        }
+                    }
+                }
+                else {
+                    socket.emit('error', "The room does not exist");
+                }
             } else {
                 newUser(socket.id, user);
             }
         });
+
+        socket.on('get-game-details', async(roomId, user) => {
+            const roomIdRedis = await redisClient.get(roomId);
+            if (roomIdRedis) {
+                let room = JSON.parse(roomIdRedis);
+                let details = {players: room.players, time: room.time}
+
+                socket.emit('receive-game-details', details);
+            }
+        })
 
         socket.on('send-total-rooms-and-users', async () => {
             try {
@@ -94,8 +146,124 @@ const io = socketIO(server);
             }
         });
 
+        socket.on('move-made', async(roomId, move, pawnPromotion=null, castling=null, enPassantPerformed=false)=> {
+            const redisRoomId = await redisClient.get(roomId);
+            if (redisRoomId) {
+                let room = JSON.parse(redisRoomId);
+
+                room.moves.push(move);
+
+                await redisClient.set(roomId, JSON.stringify(room));
+
+                if (pawnPromotion) {
+                    socket.to(roomId).emit("enemy-moved_pawn-promotion", move, pawnPromotion);
+                } else if (castling) {
+                    socket.to(roomId).emit("enemy-moved_castling", castling);
+                } else if (enPassantPerformed) {
+                    socket.to(roomId).emit("enemy-moved_en-passant", move);
+                } else {
+                    socket.to(roomId).emit("enemy-moved", move);
+                }
+            }
+        });
+
+        socket.on('update-timer', async(roomId, minutes, seconds)=> {
+            socket.to(roomId).emit("enemy-timer-updated", minutes, seconds);
+        });
+
+        socket.on('check', async(roomId) => {
+            socket.to(roomId).emit('king-is-attacked')
+        });
+
+        socket.on('checkmate', async(roomId, winner, score, startedAt)=> {
+            const roomIdRedis = await redisClient.get(roomId);
+            if (roomIdRedis) {
+                let room = JSON.parse(roomIdRedis);
+                
+                await redisClient.del(`${room.players[0].id}-played-games`);
+                await redisClient.del(`${room.players[1].id}-played-games`);
+
+                room.gameFinished = true;
+
+                await redisClient.set(roomId, JSON.stringify(room))
+
+                socket.to(roomId).emit("you-lost", winner, score);
+
+                let query = `
+                INSERT INTO games(timer, moves, user_id_white, user_id_black, started_at)
+                VALUES($1, $2, $3, $4, $5)
+                `;
+
+                await db.query(query, [room.time + '', JSON.stringify(room.moves), room.players[0].id, room.players[1].id, startedAt + '']);
+
+            }
+        });
+
+        socket.on('timer-ended', async(roomId, loser, startedAt)=> {
+            const roomIdRedis = await redisClient.get(roomId);
+            if (roomIdRedis) {
+                let room = JSON.parse(roomIdRedis);
+
+                await redisClient.del(`${room.players[0].id}-played-games`);
+                await redisClient.del(`${room.players[1].id}-played-games`);
+
+                room.gameFinished = true;
+
+                await redisClient.set(roomId, JSON.stringify(room));
+
+                let winner;
+
+                if(room.players[0].username === loser){
+                    winner = room.players[1].username;
+                }else{
+                    winner = room.players[0].username;
+                }
+
+                socket.emit("you-lost", winner);
+                socket.to(roomId).emit("you-won");
+
+                let query = `
+                INSERT INTO games(timer, moves, user_id_white, user_id_black, started_at)
+                VALUES($1, $2, $3, $4, $5)
+                `;
+
+                
+                await db.query(query, [room.time + '', JSON.stringify(room.moves), room.players[0].id, room.players[1].id, startedAt + '']);
+            }
+
+        });
+
+        socket.on('draw', roomId => {
+            socket.to(roomId).emit("draw");
+        });
+
+        socket.on("update-score", async(roomId, playerOneScore, playerTwoScore) => {
+            const roomIdRedis = await redisClient.get(roomId);
+            if (roomIdRedis) {
+                let room = JSON.parse(roomIdRedis);
+
+                let userOne = room.players[0];
+                let userTwo = room.players[1];
+
+                userOne.user_points = parseInt(userOne.user_points, 10); // Convierte a entero, si es NaN usa 0
+                userTwo.user_points = parseInt(userTwo.user_points, 10);
+                console.log(userOne.user_points, userTwo.user_points);
+                userOne.user_points += playerOneScore;
+                userTwo.user_points += playerTwoScore;
+
+                let query = `SELECT updateScores($1, $2, $3, $4)`;
+                
+                console.log(userOne.username, Math.max(userOne.user_points, 0), userTwo.username, Math.max(userTwo.user_points, 0));
+                await db.query(query, [userOne.username, Math.max(userOne.user_points, 0), userTwo.username, Math.max(userTwo.user_points, 0)]);
+
+                await redisClient.set(userOne.username + "-score-updated", 'true')
+                await redisClient.set(userTwo.username + "-score-updated", 'true')
+            }
+               
+        });
+
         socket.on('create-room', async(roomId, time, user, password=null) => {
-            const roomIdRedis = await redisClient.get('roomId');
+            const roomIdRedis = await redisClient.get(roomId);
             if (roomIdRedis) {
                 socket.emit("error", `Room with id ${roomIdRedis} already exists`);
             } else {

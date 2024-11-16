@@ -60,3 +60,48 @@ EXCEPTION
         RAISE NOTICE 'El usuario con ese username o email ya existe';
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION update_scores(
+    username_1 VARCHAR,
+    points_1 INT,
+    username_2 VARCHAR,
+    points_2 INT
+)
+RETURNS VOID AS $$
+DECLARE
+    userId_1 INT;
+    userId_2 INT;
+BEGIN
+    -- Obtener el ID del primer usuario
+    SELECT id INTO userId_1
+    FROM users
+    WHERE username = username_1;
+
+    -- Obtener el ID del segundo usuario
+    SELECT id INTO userId_2
+    FROM users
+    WHERE username = username_2;
+
+    -- Actualizar los puntos y el rango del primer usuario
+    UPDATE user_info
+    SET user_points = points_1,
+        user_rank = CASE 
+                      WHEN points_1 < 200 THEN 'beginner'
+                      WHEN points_1 < 300 THEN 'intermediate'
+                      WHEN points_1 < 400 THEN 'advanced'
+                      ELSE 'expert'
+                    END
+    WHERE user_id = userId_1;
+
+    -- Actualizar los puntos y el rango del segundo usuario
+    UPDATE user_info
+    SET user_points = points_2,
+        user_rank = CASE 
+                      WHEN points_2 < 200 THEN 'beginner'
+                      WHEN points_2 < 300 THEN 'intermediate'
+                      WHEN points_2 < 400 THEN 'advanced'
+                      ELSE 'expert'
+                    END
+    WHERE user_id = userId_2;
+END;
+$$ LANGUAGE plpgsql;

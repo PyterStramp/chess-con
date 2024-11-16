@@ -23,7 +23,7 @@ const removeUser = async (socketId) => {
     let totalUsers = parseInt(await redisClient.get('total-users')) || 0;
     totalUsers -= 1;
 
-    if (totalUsers === 0) {
+    if (totalUsers <= 0) {
         await redisClient.del('total-users'); // Eliminar el contador si no hay usuarios
     } else {
         await redisClient.set('total-users', totalUsers.toString());

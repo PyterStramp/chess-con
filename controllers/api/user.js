@@ -21,7 +21,7 @@ exports.register = async (req, res) => {
             return res.redirect("/register?error=Passwords do not match");
         }
 
-        // 1. Verificar si el usuario o email ya existen
+        
         let query = `SELECT id FROM users WHERE username = $1 OR email = $2`;
         const values = [username, email];
 
@@ -30,14 +30,14 @@ exports.register = async (req, res) => {
             return res.redirect("/register?error=Username or email is already taken");
         }
 
-        // 2. Hashear la contraseña
+       
         const encryptedPassword = await bcrypt.hash(password, 10);
 
-        // 3. Ejecutar el procedimiento almacenado `createUser`
+        
         query = `SELECT createUser($1, $2, $3)`;
         await db.query(query, [username, email, encryptedPassword]);
 
-        // 4. Obtener el ID del usuario recién creado para generar el JWT
+        
         query = `SELECT id FROM users WHERE email = $1`;
         const userResult = await db.query(query, [email]);
 
@@ -47,7 +47,7 @@ exports.register = async (req, res) => {
 
         const userId = userResult.rows[0].id;
 
-        // 5. Crear el payload y firmar el token
+        
         const payload = { id: userId, username, email };
 
         jwt.sign(payload, jwtSecret, (err, token) => {
@@ -55,9 +55,9 @@ exports.register = async (req, res) => {
                 throw err;
             }
 
-            // Configurar cookies para el token y la información adicional del usuario
+            
             res.cookie("token", token, {
-                maxAge: 1000 * 60 * 60 * 24 * 30 * 6, // 6 meses
+                maxAge: 1000 * 60 * 60 * 24 * 30 * 6, 
                 httpOnly: true,
                 secure: false,
                 sameSite: "strict"
@@ -120,7 +120,7 @@ exports.login = async(req, res) => {
             }
 
             res.cookie("token", token, {
-                maxAge: 1000 * 60 * 60 * 24 * 30 * 6, // 6 meses
+                maxAge: 1000 * 60 * 60 * 24 * 30 * 6,
                 httpOnly: true,
                 secure: false,
                 sameSite: "strict"
@@ -169,5 +169,141 @@ exports.getInfo = (req, res) =>{
     }catch(err) {
         console.log(err);
         res.status(500).json({error: err.message});
+    }
+}
+
+exports.changeUsername = async(req, res) => {
+    try {
+        const errors = validationResult(req);
+
+        if(!errors.isEmpty()){
+            return res.status(400).json({error: errors.array()[0].msg})
+        }
+
+        const {username} = req.body;
+
+        const querySearchUsername = `SELECT id FROM users WHERE username=$1`;
+        const result = await db.query(querySearchUsername, [username]);
+
+        if (result.rows.length > 0) {
+            return res.status(400).json({error: "Username is already taken"});
+        }
+
+        const queryUpdate = `UPDATE users SET username=$1 WHERE id=$2`;
+        const values = [username, req.user.id];
+        await db.query(queryUpdate, values);
+
+        const payload = {
+            id: req.user.id,
+            username,
+            email: req.user.email
+        }
+
+        jwt.sign(payload, jwtSecret, (err, token) => {
+            if(err) throw err;
+
+            res.cookie("token", token, {maxAge: 1000 * 60 * 60 * 24 * 30 * 6, httpOnly: true, secure: false, sameSite: "strict"})
+
+            res.json({message: "Your username updated successfully!", username});
+        });
+
+    } catch (err) {
+        console.log(err)
+        res.status(500).json({error: err.message})
+    }
+}
+
+exports.changeEmail = async(req, res) => {
+    try {
+        const errors = validationResult(req);
+
+        if(!errors.isEmpty()){
+            return res.status(400).json({error: errors.array()[0].msg})
+        }
+
+        const {email} = req.body;
+
+        const querySearchUsername = `SELECT id FROM users WHERE email=$1`;
+        const result = await db.query(querySearchUsername, [email]);
+
+        if (result.rows.length > 0) {
+            return res.status(400).json({error: "Email is already taken"});
+        }
+
+        const queryUpdate = `UPDATE users SET email=$1 WHERE id=$2`;
+        const values = [email, req.user.id];
+        await db.query(queryUpdate, values);
+
+        const payload = {
+            id: req.user.id,
+            username: req.user.username,
+            email
+        }
+
+        jwt.sign(payload, jwtSecret, (err, token) => {
+            if(err) throw err;
+
+            res.cookie("token", token, {maxAge: 1000 * 60 * 60 * 24 * 30 * 6, httpOnly: true, secure: false, sameSite: "strict"})
+
+            res.json({message: "Your email updated successfully!", email});
+        });
+
+    } catch (err) {
+        console.log(err)
+        res.status(500).json({error: err.message})
+    }
+}
+
+exports.changePassword = async(req, res) => {
+    try {
+        const errors = validationResult(req);
+
+        if(!errors.isEmpty()){
+            return res.status(400).json({error: errors.array()[0].msg})
+        }
+
+        const {oldPassword, newPassword} = req.body;
+
+        const querySearchUsername = `SELECT password FROM users WHERE id=$1`;
+        const result = await db.query(querySearchUsername, [req.user.id]);
+
+        const isMatch = await bcrypt.compare(oldPassword, result.rows[0].password);
+
+        if (!isMatch) {
+            return res.status(401).json({error: "Your password is incorrect"});
+        }
+
+        const encryptedPassword = await bcrypt.hash(newPassword, 10);
+
+        const queryUpdate = `UPDATE users SET password=$1 WHERE id=$2`;
+        const values = [encryptedPassword, req.user.id];
+        await db.query(queryUpdate, values);
+
+        res.json({message: "Your password updated successfully!"});
+
+    } catch (err) {
+        console.log(err)
+        res.status(500).json({error: err.message})
+    }
+}
+
+exports.logout = (req, res) => {
+    res.clearCookie("token");
+    res.clearCookie("user_points");
+    res.clearCookie("user_rank");
+
+    res.redirect("/login");
+}
+
+exports.deleteAccount = async(req, res) => {
+    try {
+        const query = `DELETE FROM users WHERE id=$1`;
+        await db.query(query, [req.user.id]);
+        
+        res.json({message: "Account deleted successfully"})
+        
+    } catch (err) {
+        console.log(err)
+        res.status(500).json({error: err.message})
     }
 }

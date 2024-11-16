@@ -387,11 +387,9 @@ const checkIfKingIsAttacked = (playerToCheck) => {
     if(check){
         if(player !== playerToCheck){
             if(isCheckmate(kingPosition)){
-                console.log('checkmate lad');
                 socket.emit('checkmate', roomId, user.username, myScore, gameStartedAtTimeStamp);
                 endGame(user.username);
             }else{
-                console.log('no its not');
                 socket.emit('check', roomId);
             }
         } 
@@ -771,7 +769,21 @@ socket.on('receive-game-details', (details) => {
 
         myTurn = true;
     } else {
-        gameStartedAtTimeStamp = new Date().toISOString().slice(0,19).replace("T", ' ');
+        const zoneDate = new Intl.DateTimeFormat('en-CA', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hourCycle: 'h23',
+            timeZone: 'America/Bogota'
+        }).format(new Date());
+        gameStartedAtTimeStamp = zoneDate
+        .replace(/(\d{2})\/(\d{2})\/(\d{4}),/, '$3-$2-$1')
+        .replace(',', '')
+        .replace(/\s?(a\.m\.|p\.m\.|AM|PM)/i, '');
+
         player = 'black';
         enemy = 'white';
 
@@ -790,7 +802,20 @@ socket.on('receive-game-details', (details) => {
 //fist player and someone join the room, then this event is emitted
 
 socket.on('game-started', (playerTwo) => {
-    gameStartedAtTimeStamp = new Date().toISOString().slice(0,19).replace("T", ' ');
+    const zoneDate = new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23',
+        timeZone: 'America/Bogota'
+    }).format(new Date());
+    gameStartedAtTimeStamp = zoneDate
+    .replace(/(\d{2})\/(\d{2})\/(\d{4}),/, '$3-$2-$1')
+    .replace(',', '')
+    .replace(/\s?(a\.m\.|p\.m\.|AM|PM)/i, '');
     startGame(playerTwo);
     if (gameHasTimer) {
         timer.start();

@@ -15,6 +15,7 @@ dotenv.config();
 // Routes
 const viewRoutes = require("./routes/views");
 const userRoutes = require("./routes/api/user");
+const gameRoutes = require("./routes/api/games");
 
 const app = express();
 const server = http.createServer(app);
@@ -46,6 +47,7 @@ const io = socketIO(server);
     // Rutas
     app.use("/", viewRoutes);
     app.use("/api", userRoutes);
+    app.use("/api", gameRoutes);
 
     // Configuración de Socket.IO
     io.on("connection", (socket) => {
@@ -247,13 +249,11 @@ const io = socketIO(server);
 
                 userOne.user_points = parseInt(userOne.user_points, 10); // Convierte a entero, si es NaN usa 0
                 userTwo.user_points = parseInt(userTwo.user_points, 10);
-                console.log(userOne.user_points, userTwo.user_points);
                 userOne.user_points += playerOneScore;
                 userTwo.user_points += playerTwoScore;
 
                 let query = `SELECT updateScores($1, $2, $3, $4)`;
                 
-                console.log(userOne.username, Math.max(userOne.user_points, 0), userTwo.username, Math.max(userTwo.user_points, 0));
                 await db.query(query, [userOne.username, Math.max(userOne.user_points, 0), userTwo.username, Math.max(userTwo.user_points, 0)]);
 
                 await redisClient.set(userOne.username + "-score-updated", 'true')

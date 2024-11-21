@@ -68,7 +68,7 @@ const io = socketIO(server);
                     }
 
                     socket.join(roomId);
-                    newUser(socket.id, user, roomId);
+                    await newUser(socket.id, user, roomId);
 
                     if (room.players[0].username === user.username) {
                         return;
@@ -97,7 +97,7 @@ const io = socketIO(server);
                     socket.emit('error', "The room does not exist");
                 }
             } else {
-                newUser(socket.id, user);
+                await newUser(socket.id, user);
             }
         });
 
@@ -269,9 +269,9 @@ const io = socketIO(server);
             } else {
                 if (password) {
                     
-                    createRoom(roomId, user, time, password);
+                    await createRoom(roomId, user, time, password);
                 } else {
-                    createRoom(roomId, user, time);
+                    await createRoom(roomId, user, time);
                 }
 
                 socket.emit('room-created');
@@ -287,7 +287,7 @@ const io = socketIO(server);
                         socket.emit("error", "You have to provide the correct password");
                         return;
                     }
-                    joinRoom(roomId, user);
+                    await joinRoom(roomId, user);
 
                     if (room.password && password !=="") {
                         socket.emit('room-joined', roomId, password);
@@ -311,7 +311,7 @@ const io = socketIO(server);
                 let room = rooms.find(room => room.players[1] ===null && !room.password);
 
                 if (room) {
-                    joinRoom(room.id, user);
+                    await joinRoom(room.id, user);
                     socket.emit('room-joined', room.id);
                 } else {
                     socket.emit('error', 'No room found');

@@ -40,6 +40,12 @@ let gameOver = false;
 let myScore = 0;
 let enemyScore = 0;
 
+let isWhiteKingMoved = false;
+let isBlackKingMoved = false;
+let isWhiteLeftRookMoved = false;
+let isWhiteRightRookMoved = false;
+let isBlackLeftRookMoved = false;
+let isBlackRightRookMoved = false;
 let gameStartedAtTimeStamp = null;
 
 if(search.length > 1) {
@@ -242,28 +248,43 @@ const move = (e) => {
     let pieceToRemove = null;
     let pieceToRemovePieceImg = null;
 
+    if (
+        selectedPiece.piece === "king" &&
+        Math.abs(
+            xAxis.findIndex((x) => x === currentBox.id[0]) -
+            xAxis.findIndex((x) => x === boxToMove.id[0])
+        ) > 1
+    ) {
+        
+        performCastling(player, currentBox.id, boxToMove.id);
+        return;
+    }
+
     if (boxToMove.children.length > 0) {
-        if (boxToMove.children[0].classList.contains(player)) {
-            performCastling(player, currentBox.id, boxToMove.id);
-            return;
-        }
         pieceToRemove = boxToMove.children[0];
         pieceToRemovePieceImg = pieceToRemove.children[0];
-    } else {
-        if(!isLeftCastlingPerformed || !isRightCastlingPerformed){
-            if(piece.dataset.piece === 'rook'){
-                let myKingPosition = getKingPosition(player);
+    }
 
-                let pieceXAxisIndex = xAxis.findIndex(x => x === currentBox.id[0]);
-                let myKingXAxisIndex = xAxis.findIndex(x => x === myKingPosition[0]);
-
-                if(pieceXAxisIndex < myKingXAxisIndex){
-                    isLeftCastlingPerformed = true;
-                }else{
-                    isRightCastlingPerformed = true;
-                }
+    if (piece.dataset.piece === "king") {
+        if (player === "white") {
+            isWhiteKingMoved = true;
+        } else {
+            isBlackKingMoved = true;
+        }
+    } else if (piece.dataset.piece === "rook") {
+        if (player === "white") {
+            if (selectedPiece.position === "A-8") {
+                isWhiteLeftRookMoved = true;
+            } else if (selectedPiece.position === "H-8") {
+                isWhiteRightRookMoved = true;
             }
-        }        
+        } else {
+            if (selectedPiece.position === "A-1") {
+                isBlackLeftRookMoved = true;
+            } else if (selectedPiece.position === "H-1") {
+                isBlackRightRookMoved = true;
+            }
+        }
     }
 
     currentBox.innerHTML="";
@@ -500,65 +521,82 @@ const moveEnemy = (move, pawnPromotion=null, enPassantPerformed=false) => {
 }
 
 // Castling Logic
-const performCastling = (currentPlayer, rookPosition, kingPosition) => {
-    let rookBox = document.getElementById(rookPosition);
-    let kingBox = document.getElementById(kingPosition);
+const performCastling = (currentPlayer, kingStartPosition, kingTargetPosition) => {
+    let kingBox = document.getElementById(kingStartPosition);
+    let king = kingBox.children[0]; // Rey seleccionado
 
-    let rook = rookBox.children[0];
-    let king = kingBox.children[0];
+    // Calcular la posición inicial de la torre y su destino según el enroque (izquierdo o derecho)
+    let rookStartPosition, rookTargetPosition;
 
-    let newRookPosition = rookPosition;
-    let newKingPosition = kingPosition;
-
-    if(rookPosition[0] === 'A'){
-        newRookPosition = 'D' + rookPosition.substr(1);
-        newKingPosition = 'C' + kingPosition.substr(1);
-    }else{
-        newRookPosition = 'F' + rookPosition.substr(1);
-        newKingPosition = 'G' + kingPosition.substr(1);
+    if (kingTargetPosition[0] === "C") {
+        // Enroque largo
+        rookStartPosition = "A" + kingTargetPosition.substr(1); // Torre inicial (A-8 o A-1)
+        rookTargetPosition = "D" + kingTargetPosition.substr(1); // Torre destino (D-8 o D-1)
+    } else if (kingTargetPosition[0] === "G") {
+        // Enroque corto
+        rookStartPosition = "H" + kingTargetPosition.substr(1); // Torre inicial (H-8 o H-1)
+        rookTargetPosition = "F" + kingTargetPosition.substr(1); // Torre destino (F-8 o F-1)
+    } else {
+        displayToast("Invalid castling move");
+        return;
     }
 
-    rookBox.innerHTML = "";
+    // Validar que la torre esté en la posición correcta
+    let rookBox = document.getElementById(rookStartPosition);
+    if (!rookBox || rookBox.children.length === 0 || rookBox.children[0].dataset.piece !== "rook") {
+        displayToast("Invalid castling: Rook not in position");
+        return;
+    }
+
+    let rook = rookBox.children[0]; // Torre seleccionada
+
+    // Limpiar las casillas iniciales
     kingBox.innerHTML = "";
+    rookBox.innerHTML = "";
 
-    let newRookBox = document.getElementById(newRookPosition);
-    let newKingBox = document.getElementById(newKingPosition);
+    // Obtener las casillas de destino
+    let newKingBox = document.getElementById(kingTargetPosition);
+    let newRookBox = document.getElementById(rookTargetPosition);
 
-    newRookBox.appendChild(rook);
+    // Mover el rey y la torre
     newKingBox.appendChild(king);
+    newRookBox.appendChild(rook);
 
-    if(currentPlayer === player){
-        let check = isCheck(newKingPosition);
+    // Verificar si el movimiento deja al rey en jaque
+/*     if (isCheck(kingTargetPosition)) {
+        // Revertir si el rey está en jaque
+        newKingBox.innerHTML = "";
+        newRookBox.innerHTML = "";
+        kingBox.appendChild(king);
+        rookBox.appendChild(rook);
 
-        if(check){
-            newRookBox.innerHTML = "";
-            newKingBox.innerHTML = "";
+        displayToast("Your king is under attack");
+        return;
+    } */
 
-            rookBox.appendChild(rook);
-            kingBox.appendChild(king);
+    // Actualizar las variables globales de enroque
+    if (rookStartPosition[0] === "A") {
+        isLeftCastlingPerformed = true;
+    } else {
+        isRightCastlingPerformed = true;
+    }
 
-            displayToast("Your king is under attack");
-        }else{
-            if(rookPosition[0] === 'A'){
-                isLeftCastlingPerformed = true;
-            }else{
-                isRightCastlingPerformed = true;
-            }
+    // Registrar el enroque
+    castling = {
+        kingStartPosition,
+        kingTargetPosition,
+        rookStartPosition,
+        rookTargetPosition,
+    };
 
-            castling = {
-                rookPosition,
-                kingPosition
-            }
-
-            endMyTurn(document.getElementById(kingPosition), false, true);
-        }
-    }else{
-        castling = null;
-
+    // Finalizar el turno del jugador
+    if (currentPlayer === player) {
+        endMyTurn(newKingBox, false, true);
+    } else {
         myTurn = true;
-        setCursor('pointer');
+        setCursor("pointer");
 
-        if(gameHasTimer){
+        if (gameHasTimer) {
             timer.start();
         }
     }
@@ -827,8 +865,11 @@ socket.on('enemy-moved', (move) => {
 })
 
 socket.on("enemy-moved_castling", (enemyCastling) => {
-    const {rookPosition, kingPosition} = enemyCastling
-    performCastling(enemy, rookPosition, kingPosition)
+    const { kingStartPosition, kingTargetPosition } = enemyCastling;
+
+    performCastling(enemy, kingStartPosition, kingTargetPosition);
+
+
 });
 
 socket.on('enemy-moved_pawn-promotion', (move, pawnPromotion) => {

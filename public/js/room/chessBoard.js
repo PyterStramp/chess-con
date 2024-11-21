@@ -117,6 +117,18 @@ const blackPieces = blackPositions.map(({ pos, piece }) => ({
 
 const totalPiecesPoints = whitePieces.reduce((acc, piece) => acc + piece.points, 0);
 
+const isKingMoved = (player) => {
+    return player === "white" ? isWhiteKingMoved : isBlackKingMoved;
+};
+
+const isRookMoved = (player, direction) => {
+    if (player === "white") {
+        return direction === "right" ? isWhiteRightRookMoved : isWhiteLeftRookMoved;
+    } else {
+        return direction === "right" ? isBlackRightRookMoved : isBlackLeftRookMoved;
+    }
+};
+
 const getPawnPossibleMoves = (xAxisPos, yAxisPos, xAxisIndex, yAxisIndex) => {
     let possibleMoves = [];
     let forwardMoves = 1;
@@ -280,24 +292,6 @@ const getRookPossibleMoves = (xAxisPos, yAxisPos, xAxisIndex, yAxisIndex) => {
                     if(rightBlock.childElementCount > 0){
                         if(rightBlock.children[0].classList.contains(enemy)){
                             possibleMoves.push(rightBlock);
-                        }else{
-                            if(!isLeftCastlingPerformed){
-                                let pieceCollideWith = rightBlock.children[0];
-
-                                if(pieceCollideWith.dataset.piece === 'king'){
-                                    let myKingPosition = rightBlock.id;
-
-                                    if(player === 'white'){
-                                        if(xAxisPos + '-' + yAxisPos === 'A-8' && myKingPosition === 'E-8'){
-                                            possibleMoves.push(rightBlock);
-                                        }
-                                    }else{
-                                        if(xAxisPos + '-' + yAxisPos === 'A-1' && myKingPosition === 'E-1'){
-                                            possibleMoves.push(rightBlock);
-                                        }
-                                    }
-                                }
-                            }
                         }
 
                         rightCollision = true;
@@ -316,26 +310,7 @@ const getRookPossibleMoves = (xAxisPos, yAxisPos, xAxisIndex, yAxisIndex) => {
                     if(leftBlock.childElementCount > 0){
                         if(leftBlock.children[0].classList.contains(enemy)){
                             possibleMoves.push(leftBlock);
-                        }else{
-                            if(!isRightCastlingPerformed){
-                                let pieceCollideWith = leftBlock.children[0]
-
-                                if(pieceCollideWith.dataset.piece === 'king'){
-                                    let myKingPosition = leftBlock.id;
-
-                                    if(player === 'white'){
-                                        if(xAxisPos + '-' + yAxisPos === 'H-8' && myKingPosition === 'E-8'){
-                                            possibleMoves.push(leftBlock);
-                                        }
-                                    }else{
-                                        if(xAxisPos + '-' + yAxisPos === 'H-1' && myKingPosition === 'E-1'){
-                                            possibleMoves.push(leftBlock);
-                                        }
-                                    }
-                                }
-                            }
                         }
-
                         leftCollision = true;
                     }else{
                         possibleMoves.push(leftBlock);
@@ -666,6 +641,18 @@ const getKingPossibleMoves = (xAxisPos, yAxisPos, xAxisIndex, yAxisIndex) => {
         }
     }
     
+    if (!isKingMoved(player) && !isCheck(`${xAxisPos}-${yAxisPos}`)) {
+        if (!isRightCastlingPerformed && canPerformCastling(player, "right")) {
+            let castlingPosition = `G-${yAxisPos}`;
+            possibleMoves.push(document.getElementById(castlingPosition));
+        }
+
+        if (!isLeftCastlingPerformed && canPerformCastling(player, "left")) {
+            let castlingPosition = `C-${yAxisPos}`;
+            possibleMoves.push(document.getElementById(castlingPosition));
+        }
+    }
+
     possibleMoves = possibleMoves.filter(possibleMove => {
         let kingPosition = possibleMove.id;
 
@@ -676,6 +663,30 @@ const getKingPossibleMoves = (xAxisPos, yAxisPos, xAxisIndex, yAxisIndex) => {
 
     return possibleMoves;
 }
+
+const canPerformCastling = (player, direction) => {
+    const yAxisPos = player === "white" ? 8 : 1;
+    const kingStartPos = `E-${yAxisPos}`;
+
+    const castlingPath = direction === "right"
+        ? [`F-${yAxisPos}`, `G-${yAxisPos}`]
+        : [`D-${yAxisPos}`, `C-${yAxisPos}`, `B-${yAxisPos}`];
+
+    const rookStartPos = direction === "right"
+        ? `H-${yAxisPos}`
+        : `A-${yAxisPos}`;
+
+    if (isRookMoved(player, direction)) return false;
+
+    for (const position of castlingPath) {
+        let block = document.getElementById(position);
+        if (block.childElementCount > 0 || isCheck(position)) {
+            return false;
+        }
+    }
+
+    return true;
+};
 
 const switchPlayerAndEnemy = () => {
     if(player === 'white'){
